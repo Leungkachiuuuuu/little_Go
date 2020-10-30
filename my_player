@@ -1,0 +1,401 @@
+import sys
+
+
+class my_player():
+    def __init__(self,input,input2):
+        # four directions (left,right,up,down)
+        self.direction = [(1,0),(-1,0),(0,1),(0,-1)]
+        # empty board
+        self.empty = [["0" for i in range(5)] for i in range(5)]
+
+        #input2 keeps track of the steps
+        step = open(input2,"r")
+
+        #state is the input
+        state = open(input,"r")
+
+        i = 0
+        #line2-6
+        self.last_state = []
+
+        #line7-11
+        self.cur_state = []
+        last = []
+        cur = []
+
+        #read line 0-10
+        for line in state:
+            if i == 0:
+                self.player = line.strip()
+                if self.player == "1":
+                    self.oppo ="2"
+                else:
+                    self.oppo = "1"
+            elif(i>0 and i <6):
+                last.append(line.strip())
+            else:
+                cur.append(line.strip())
+            i = i + 1
+
+        for i in last:
+            self.last_state.append(list(i))
+        for i in cur:
+            self.cur_state.append(list(i))
+
+
+        b = 0
+        if self.last_state == self.empty and self.last_state == self.cur_state:
+            self.step = 1
+        elif (self.score("1") == 1 and self.score("2") == 0):
+            self.step = 2
+        else:
+            for i in step:
+                if b == 0 :
+                    self.step = int(i)
+                if b == 1:
+                    self.last_move = i
+        step.close()
+
+    # chess differences between last state and cur state
+    def diff(self,player,last_board,cur_board):
+        r = []
+        for i in range(5):
+            for j in range(5):
+                if cur_board[i][j] =="0" and last_board[i][j] == player:
+                    r.append((i,j))
+        return r
+
+
+    # return the list that contains all the chess neighoring together in given position
+    def neighbor(self,x,y,arr,player):
+        for i in self.direction:
+            if x+i[0] < 5 and x + i[0] > -1 and y+i[1] <5 and y+i[1]>-1 and self.cur_state[x+i[0]][y+i[1]] == player:
+                if (x+i[0],y+i[1]) not in arr:
+                    arr.append((x+i[0],y+i[1]))
+                    self.neighbor(x+i[0],y+i[1],arr,player)
+        return arr
+
+    # return true if the given chess has liberty
+    def has_liberty(self,x,y):
+        for i in self.direction:
+            if x+i[0] < 5 and x + i[0] > -1 and y+i[1] <5 and y+i[1]>-1 and self.cur_state[x+i[0]][y+i[1]] == "0":
+                return True
+        return False
+
+    #return true if the given position
+    def group_has_liberty(self,x,y,player):
+        arr = self.neighbor(x,y,[(x,y)],player)
+        for pos in arr:
+            if self.has_liberty(pos[0],pos[1]):
+                return True
+        return False
+
+    #convert all the places in the arr to 0
+    def remove_chess(self,arr):
+        for i in arr:
+            self.cur_state[i[0]][i[1]] ="0"
+
+    #print cur_state
+    def print_state(self):
+        for i in self.cur_state:
+            r = ""
+            for j in i:
+                r = r + j
+            print(r)
+
+
+    #check if that given position will remove neighboring chess, if so, remove.
+    def detect_and_remove(self,x,y,player):
+        visited = []
+        r = []
+        for i in self.direction:
+            if x + i[0] < 5 and x + i[0] > -1 and y + i[1] < 5 and y + i[1] > -1 and self.cur_state[x + i[0]][y + i[1]] != "0" and self.cur_state[x+i[0]][y+i[1]] != player:
+                if not self.group_has_liberty(x + i[0], y + i[1], self.reverse_player(player)):
+                    chess_to_remove = self.neighbor(x + i[0], y + i[1], [(x + i[0], y + i[1])],self.reverse_player(player))
+                    if chess_to_remove not in visited:
+                        r = r + (chess_to_remove)
+                        visited.append(chess_to_remove)
+        return r
+
+
+    # return the list of positions that chess can be placed for that player
+    def candidates(self,player):
+        arr = []
+        for i in range(5):
+            for j in range(5):
+                if self.cur_state[i][j] == "0":
+                    self.cur_state[i][j] = player
+                    if self.valid_move(i,j,player):
+                        arr.append((i,j))
+                    self.cur_state[i][j] = "0"
+        return arr
+
+    # check if the given position is valid to be placed including KO rules
+    def valid_move(self,x,y,player):
+        self.cur_state[x][y] = player
+        if self.group_has_liberty(x,y,player):
+            return True
+        for i in self.direction:
+            if x + i[0] < 5 and x + i[0] > -1 and y + i[1] < 5 and y + i[1] > -1 and  self.cur_state[x+i[0]][y+i[1]] == self.reverse_player(player):
+                if not self.group_has_liberty(x+i[0],y+i[1],self.reverse_player(player)):
+                    self.cur_state[x][y] = "0"
+                    return True
+        self.cur_state[x][y] = "0"
+        return False
+
+    # check if the game is end
+    def is_end(self):
+        if self.player == "2":
+            if self.step == 25:
+                return True
+        if self.player == "1":
+            if self.step == 24:
+                return True
+
+        return False
+
+    # return the score of that player
+    def score(self,player):
+        score = 0
+        for i in range(5):
+            for j in range(5):
+                if self.cur_state[i][j] == player:
+                    score = score + 1
+        return score
+
+    # return oppo number
+    def reverse_player(self,player):
+        if player == "1":
+            return "2"
+        else:
+            return "1"
+
+    # recover all the removed chess
+    def recover(self,arr,player):
+        for i in arr:
+            self.cur_state[i[0]][i[1]] = player
+
+    # all the chess at the edge
+    def edge(self,player):
+        arr = []
+        for i in range(5):
+            for j in range(5):
+                if i == 0 or i == 4:
+                    if self.cur_state[i][j] == player:
+                        arr.append((i,j))
+                if j == 0 or j ==4:
+                    if self.cur_state[i][j] == player :
+                        arr.append((i,j))
+        return len(arr)
+
+    # return the list contains the list of all grouping chess
+    def group(self,player):
+        player_r = []
+        oppo_r = []
+        player_visited = []
+        oppo_visited = []
+        for i in range(5):
+            for j in range(5):
+                if self.cur_state[i][j] == player:
+                    if (i,j) not in player_visited:
+                        a = (self.neighbor(i,j,[(i,j)],player))
+                        for pos in a:
+                            player_visited = player_visited + [pos]
+                        player_r.append(a)
+
+                if self.cur_state[i][j] == self.reverse_player(player):
+                    if (i, j) not in oppo_visited:
+                        b = (self.neighbor(i, j, [(i, j)], self.reverse_player(player)))
+                        for pos in b:
+                            oppo_visited = oppo_visited + [pos]
+                        oppo_r.append(b)
+
+        return (player_r,oppo_r)
+
+
+    # evaluate the points that each cluster of chesses (if the group of chess has only one liberty, then the point is very high)
+    def danger_pos(self,player):
+        arr = []
+        for i in range(5):
+            for j in range(5):
+                if self.cur_state[i][j] == player:
+                    r = self.neighbor(i,j,[(i,j)],player)
+                    if sorted(r) not in arr:
+                        arr.append(sorted(r))
+        result = 0
+        result_list = []
+        for group in arr:
+            num = len(group)
+            c  = 0
+            lib_group = []
+            for (x,y) in group:
+                #print(x,y)
+                for i in self.direction:
+                    if x + i[0] < 5 and x + i[0] > -1 and y + i[1] < 5 and y + i[1] > -1 and self.cur_state[x + i[0]][y + i[1]] == "0":
+                        if (x + i[0],y + i[1]) not in lib_group:
+                            lib_group.append((x + i[0],y + i[1]))
+            result = result + num/len(lib_group)
+            result_list.append(group)
+
+        return result
+
+
+
+
+
+    def evaluation(self,player):
+        (player_r,oppo_r) = self.group(player)
+        if self.is_end() and self.player == "2":
+            return 7*self.score(player)-7*self.score(self.reverse_player(player))
+        elif self.is_end() and self.player == "1":
+            return 7 * self.score(player) - 7 * self.score(self.reverse_player(player))+4*(self.score("0")-len(self.candidates(self.reverse_player(player))))
+        else:
+            player_danger = self.danger_pos(player)*3
+            oppo_danger = self.danger_pos(self.reverse_player(player))*3
+        my_value = 7*self.score(player)-1*len(player_r)+4*(self.score("0")-len(self.candidates(self.reverse_player(player))))-2*self.edge(player)-player_danger
+        oppo_value = 7*self.score(self.reverse_player(player))-1*len(oppo_r)+4*(self.score("0")-len(self.candidates(self.player)))-2*self.edge(self.reverse_player(player))-oppo_danger
+     # for test
+     # if self.cur_state[4][2] == "1" or self.cur_state[2][1] == "1":
+        #print("")
+        #self.print_state()
+        #print("eye score", 4*(self.score("0")-len(self.candidates(self.reverse_player(player))))-4*(self.score("0")-len(self.candidates(self.player))))
+        #print("eating score", 7*self.score(player)-7*self.score(self.reverse_player(player)))
+        #print("connecting score",-1*len(player_r)-(-1*len(oppo_r)))
+        #print('edge score',-2*self.edge(player)-(-2*self.edge(self.reverse_player(player))))
+        #print("danger_pos", 3*player_danger-3*oppo_danger)
+        #print("my_value-oppo_value",my_value-oppo_value)
+        return my_value - oppo_value
+
+    def liberty_group(self,player):
+        arr = []
+        for x in range(5):
+            for y in range(5):
+                if self.cur_state[x][y] == player:
+                    for i in self.direction:
+                        if x + i[0] < 5 and x + i[0] > -1 and y + i[1] < 5 and y + i[1] > -1 and self.cur_state[x+i[0]][y+i[1]] == "0":
+                            arr.append((x+i[0],y+i[1]))
+        return list(set(arr))
+
+    def copy_borad(self):
+        r = [["0" for x in range(5)] for y in range(5)]
+        for i in range(5):
+            for j in range(5):
+                r = self.cur_state[i][j]
+        return r
+
+
+    def max(self,depth,removed_chess,alpha,beta):
+        maxv =-1000
+        x = None
+        y = None
+        #print("max",depth)
+        if depth ==2 or self.is_end():
+
+            return (self.evaluation(self.player),0,0)
+
+        candidates = self.candidates(self.player)
+        if len(removed_chess) == 1 and removed_chess[0] in candidates:
+            candidates.remove(removed_chess[0])
+
+        candidates.append((-1,-1))
+        for candidate in candidates:
+            l =[]
+            if candidate != (-1,-1):
+                self.cur_state[candidate[0]][candidate[1]] = self.player
+                l = self.detect_and_remove(candidate[0],candidate[1],self.player)
+                self.remove_chess(l)
+
+
+            self.step = self.step + 1
+            (m, min_i, min_j) = self.min(depth+1,l,alpha,beta)
+            if m > maxv:
+                maxv = m
+                x = candidate[0]
+                y = candidate[1]
+            if candidate != (-1,-1):
+                self.recover(l,self.oppo)
+                self.cur_state[candidate[0]][candidate[1]] = '0'
+            self.step = self.step - 1
+            if maxv >= beta:
+                return (maxv, x, y)
+            if maxv > alpha:
+                alpha = maxv
+        return (maxv, x, y)
+
+
+
+    def min(self,depth,removed_chess,alpha,beta):
+        minv = 1000
+        x = None
+        y = None
+        l = []
+        if depth ==2 or self.is_end():
+            return (self.evaluation(self.player),0,0)
+        candidates = self.candidates(self.oppo)
+        if len(removed_chess) == 1 and removed_chess[0] in candidates:
+            candidates.remove(removed_chess[0])
+        candidates.append((-1, -1))
+
+        for candidate in candidates:
+            if candidate != (-1, -1):
+                self.cur_state[candidate[0]][candidate[1]] = self.oppo
+                l = self.detect_and_remove(candidate[0],candidate[1],self.oppo)
+                self.remove_chess(l)
+            self.step = self.step + 1
+
+            (m, max_i, max_j) = self.max(depth+1,l,alpha,beta)
+            if m < minv:
+                minv = m
+                x = candidate[0]
+                y = candidate[1]
+            if candidate != (-1, -1):
+                self.recover(l,self.player)
+                self.cur_state[candidate[0]][candidate[1]] = '0'
+
+            self.step = self.step - 1
+            if minv <= alpha:
+                return (minv, x, y)
+            if minv < beta:
+                beta = minv
+
+        return (minv, x, y)
+
+    def move(self):
+        candidates = self.candidates(self.player)
+        m = -1000
+        x = None
+        y = None
+        for candidate in candidates:
+            self.cur_state[candidate[0]][candidate[1]] = self.player
+            if m < (self.evaluaution(self.player)):
+                m = self.evaluaution(self.player)
+                x = candidate[0]
+                y = candidate[1]
+
+        return (x,y)
+
+    def move2(self):
+        if (self.last_state == self.empty and self.last_state == self.cur_state) or (self.score("1") == 1 and self.cur_state[2][2] == "0" and self.score("2")==0):
+            return (2,2)
+        (m,x,y) = self.max(0,self.diff(self.player,self.last_state,self.cur_state),-1000,1000)
+        output = open("input2.txt","w")
+        output.write(str(self.step+1))
+        if x == -1 and y ==-1:
+            return False
+        return (x,y)
+
+
+
+if __name__ == "__main__":
+    input = "input.txt"
+    input2 = "input2.txt"
+    c = my_player(input,input2)
+    a = c.move2()
+    output2 = open("input2.txt", "w")
+    output2.write(str(c.step + 2))
+    output = open("output.txt", "w")
+    if a == False:
+        output.write("PASS")
+    else:
+        output.write("{},{}".format(a[0],a[1]))
+
